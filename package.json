@@ -1,0 +1,24 @@
+{
+  "name": "incidentiq-agent",
+  "version": "1.0.0",
+  "description": "IncidentIQ — AI-Powered IT Support Triage Agent for Elasticsearch Agent Builder Hackathon 2026",
+  "scripts": {
+    "setup": "node setup.js",
+    "verify": "node verify.js"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.12.0",
+    "dotenv": "^16.4.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "elasticsearch",
+    "agent-builder",
+    "elastic-workflows",
+    "incident-triage",
+    "ai-agent"
+  ],
+  "license": "MIT"
+}
