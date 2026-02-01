@@ -1,0 +1,133 @@
+name: incident_triage_workflow
+enabled: true
+
+triggers:
+  - type: manual
+
+inputs:
+  - name: incident_summary
+    type: string
+  - name: error_rate
+    type: number
+  - name: affected_services
+    type: string
+  - name: primary_service
+    type: string
+  - name: service_category
+    type: string
+
+steps:
+  # ─────────────────────────────────────────────────
+  # STEP 1: Set defaults before branching
+  # ─────────────────────────────────────────────────
+  - name: set_defaults
+    type: data.set
+    with:
+      priority: "low"
+      team_assigned: "application"
+      team_channel: "#app-oncall"
+
+  # ─────────────────────────────────────────────────
+  # STEP 2: Determine Priority
+  #   Critical  → error_rate >= 30 AND 3+ services
+  #   High      → error_rate >= 15 OR 2+ services
+  #   Medium    → error_rate >= 5
+  #   Low       → otherwise (default)
+  # ─────────────────────────────────────────────────
+  - name: check_medium_priority
+    type: if
+    condition: "{{ inputs.error_rate >= 5 }}"
+    steps:
+      - name: set_priority_medium
+        type: data.set
+        with:
+          priority: "medium"
+
+  - name: check_high_priority
+    type: if
+    condition: "{{ inputs.error_rate >= 15 }}"
+    steps:
+      - name: set_priority_high
+        type: data.set
+        with:
+          priority: "high"
+
+  - name: check_critical_priority
+    type: if
+    condition: "{{ inputs.error_rate >= 30 }}"
+    steps:
+      - name: set_priority_critical
+        type: data.set
+        with:
+          priority: "critical"
+
+  # ─────────────────────────────────────────────────
+  # STEP 3: Assign Team based on service_category
+  # ─────────────────────────────────────────────────
+  - name: check_infrastructure
+    type: if
+    condition: "{{ inputs.service_category == 'infrastructure' }}"
+    steps:
+      - name: route_infra
+        type: data.set
+        with:
+          team_assigned: "infrastructure"
+          team_channel: "#infra-oncall"
+
+  - name: check_database
+    type: if
+    condition: "{{ inputs.service_category == 'database' }}"
+    steps:
+      - name: route_db
+        type: data.set
+        with:
+          team_assigned: "database"
+          team_channel: "#db-oncall"
+
+  - name: check_networking
+    type: if
+    condition: "{{ inputs.service_category == 'networking' }}"
+    steps:
+      - name: route_network
+        type: data.set
+        with:
+          team_assigned: "networking"
+          team_channel: "#network-oncall"
+
+  # ─────────────────────────────────────────────────
+  # STEP 4: Create Incident Ticket
+  # ─────────────────────────────────────────────────
+  - name: create_ticket
+    type: elasticsearch.index
+    with:
+      index: incident_tickets
+      document:
+        ticket_id: "TKT-{{ execution.id }}"
+        incident_summary: "{{ inputs.incident_summary }}"
+        priority: "{{ steps.set_priority_critical.priority | default: steps.set_priority_high.priority | default: steps.set_priority_medium.priority | default: 'low' }}"
+        team_assigned: "{{ steps.route_infra.team_assigned | default: steps.route_db.team_assigned | default: steps.route_network.team_assigned | default: 'application' }}"
+        team_channel: "{{ steps.route_infra.team_channel | default: steps.route_db.team_channel | default: steps.route_network.team_channel | default: '#app-oncall' }}"
+        status: "open"
+        primary_service: "{{ inputs.primary_service }}"
+        affected_services: "{{ inputs.affected_services }}"
+        error_rate: "{{ inputs.error_rate }}"
+        created_at: "{{ now | date: 'YYYY-MM-DDThh:mm:ssZ' }}"
+        created_by: "IncidentIQ"
+
+  # ─────────────────────────────────────────────────
+  # STEP 5: Critical Alert (conditional)
+  # ─────────────────────────────────────────────────
+  - name: check_critical_alert
+    type: if
+    condition: "{{ inputs.error_rate >= 30 }}"
+    steps:
+      - name: write_critical_alert
+        type: elasticsearch.index
+        with:
+          index: incident_tickets
+          document:
+            alert_type: "critical_incident"
+            alert_status: "firing"
+            alert_message: "CRITICAL INCIDENT: {{ inputs.incident_summary }} | Team: {{ steps.route_infra.team_assigned | default: steps.route_db.team_assigned | default: steps.route_network.team_assigned | default: 'application' }} | Services: {{ inputs.affected_services }}"
+            alert_created_at: "{{ now | date: 'YYYY-MM-DDThh:mm:ssZ' }}"
+            alert_created_by: "IncidentIQ"

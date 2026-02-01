@@ -1,0 +1,76 @@
+{
+  "_comment": "IncidentIQ — Tool Configurations for Elastic Agent Builder. Use these exact settings when creating tools in Kibana. See README.md for step-by-step instructions.",
+
+  "tools": [
+    {
+      "tool_id": "search_known_issues",
+      "type": "index_search",
+      "target_index": "known_issues",
+      "description": "Searches the known_issues index for documented solutions to common IT problems. Use this when you need to check if a reported issue has a known fix or workaround. Query with service names, error types, or symptom descriptions.",
+      "labels": ["search", "knowledge-base"]
+    },
+    {
+      "tool_id": "search_past_incidents",
+      "type": "index_search",
+      "target_index": "past_incidents",
+      "description": "Searches historical incident records to find similar past incidents and how they were resolved. Use this to understand patterns and find relevant precedent. Query with service names, symptoms, or incident types.",
+      "labels": ["search", "history"]
+    },
+    {
+      "tool_id": "get_log_errors",
+      "type": "esql",
+      "description": "Retrieves recent error-level log entries for a specific service from the last 2 hours. Use this to get raw log data and understand what errors are actually occurring in the system right now. Pass the exact service name (e.g. payment-api, auth-service).",
+      "labels": ["esql", "logs", "diagnostics"],
+      "query": "FROM system_logs | WHERE level == \"error\" AND service == ?service_name AND @timestamp >= now() - 2h | SORT @timestamp desc | KEEP @timestamp, service, message, severity, component | LIMIT 20",
+      "parameters": [
+        {
+          "name": "service_name",
+          "type": "keyword",
+          "description": "The name of the service to check logs for (e.g. \"payment-api\", \"auth-service\", \"api-gateway\", \"order-service\", \"product-catalog\")"
+        }
+      ]
+    },
+    {
+      "tool_id": "calc_error_rate",
+      "type": "esql",
+      "description": "Calculates the current error rate across all services and counts how many unique services are affected over the last 2 hours. Use this to assess the scope and severity of an incident. Returns total_logs, error_count, unique_services, and error_rate percentage.",
+      "labels": ["esql", "analytics", "severity"],
+      "query": "FROM system_logs | WHERE @timestamp >= now() - 2h | STATS total_logs = COUNT(*), error_count = COUNT(level == \"error\"), unique_services = COUNT_DISTINCT(service) | EVAL error_rate = error_count / total_logs * 100 | KEEP total_logs, error_count, unique_services, error_rate",
+      "parameters": []
+    },
+    {
+      "tool_id": "triage_and_route",
+      "type": "workflow",
+      "workflow_name": "incident_triage_workflow",
+      "description": "Triggers the incident triage workflow to perform rules-based automation. Executes priority determination, team assignment, and ticket creation. ONLY use this AFTER you have gathered diagnosis information from the search and ES|QL tools and are ready to take action. Pass all five required inputs.",
+      "labels": ["workflow", "triage", "automation"],
+      "parameters": [
+        {
+          "name": "incident_summary",
+          "type": "string",
+          "description": "A concise 2-3 sentence summary of the incident, including what is happening, the likely cause, and recommended action"
+        },
+        {
+          "name": "error_rate",
+          "type": "number",
+          "description": "The error rate percentage from the calc_error_rate tool result"
+        },
+        {
+          "name": "affected_services",
+          "type": "string",
+          "description": "Comma-separated list of affected service names (e.g. \"payment-api,order-service,api-gateway\")"
+        },
+        {
+          "name": "primary_service",
+          "type": "string",
+          "description": "The single most impacted service name (e.g. \"payment-api\")"
+        },
+        {
+          "name": "service_category",
+          "type": "string",
+          "description": "Category of the affected services. Must be one of: infrastructure, application, database, networking"
+        }
+      ]
+    }
+  ]
+}
