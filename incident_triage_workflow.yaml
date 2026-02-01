@@ -111,7 +111,7 @@ steps:
         primary_service: "{{ inputs.primary_service }}"
         affected_services: "{{ inputs.affected_services }}"
         error_rate: "{{ inputs.error_rate }}"
-        created_at: "{{ now | date: 'YYYY-MM-DDThh:mm:ssZ' }}"
+        created_at: "{{ 'now' | date: '%Y-%m-%dT%H:%M:%SZ' }}"
         created_by: "IncidentIQ"
 
   # ─────────────────────────────────────────────────
@@ -129,5 +129,5 @@ steps:
             alert_type: "critical_incident"
             alert_status: "firing"
             alert_message: "CRITICAL INCIDENT: {{ inputs.incident_summary }} | Team: {{ steps.route_infra.team_assigned | default: steps.route_db.team_assigned | default: steps.route_network.team_assigned | default: 'application' }} | Services: {{ inputs.affected_services }}"
-            alert_created_at: "{{ now | date: 'YYYY-MM-DDThh:mm:ssZ' }}"
+            alert_created_at: "{{ 'now' | date: '%Y-%m-%dT%H:%M:%SZ' }}"
             alert_created_by: "IncidentIQ"
