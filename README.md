@@ -90,8 +90,8 @@ The workflow step is intentionally rules-based, not AI-driven. Priority and rout
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/incidentiq-agent.git
-cd incidentiq-agent
+git clone https://github.com/awais-ur-rehman/elastic-search
+cd elastic-search
 npm install
 ```
 
