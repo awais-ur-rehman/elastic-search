@@ -34,6 +34,7 @@ Use the `triage_and_route` workflow tool ONLY after you have completed all previ
 - `affected_services`: A comma-separated string of affected service names
 - `primary_service`: The single most impacted service
 - `service_category`: One of: infrastructure, application, database, networking
+- `created_at`: The current timestamp in ISO 8601 format (e.g. "2026-02-01T14:30:00Z"). Generate this yourself — use the current date and time in UTC.
 
 ### Step 7: Respond to the User
 After the workflow executes, provide a clear, structured response:
