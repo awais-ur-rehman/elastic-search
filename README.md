@@ -1,68 +1,43 @@
-# 🤖 IncidentIQ — AI-Powered IT Support Triage Agent
+# IncidentIQ
 
-> **Elasticsearch Agent Builder Hackathon 2026 Entry**
-> An automated multi-step AI agent that triages, diagnoses, and routes IT support incidents using Elastic Agent Builder, ES|QL, Search, and Workflows.
+An AI-powered IT incident triage agent built with Elastic Agent Builder. You describe an incident in plain English — IncidentIQ searches the knowledge base, pulls logs, calculates error rates, and runs a triage workflow to assign priority, route to the right team, and create a ticket. All in under 30 seconds.
 
----
-
-## 📋 Table of Contents
-- [Problem Statement](#-problem-statement)
-- [How It Works](#-how-it-works)
-- [Architecture](#-architecture)
-- [Agent Tools](#-agent-tools)
-- [Workflows](#-workflows)
-- [Setup Guide](#-setup-guide)
-- [Data Indexes](#-data-indexes)
-- [Agent Configuration](#-agent-configuration)
-- [Demo Scenarios](#-demo-scenarios)
-- [Tech Stack](#-tech-stack)
-- [License](#-license)
+Built for the [Elasticsearch Agent Builder Hackathon 2026](https://elasticsearch.devpost.com/).
 
 ---
 
-## 🔴 Problem Statement
+## The Problem
 
-When IT incidents occur — servers crashing, apps failing, networks degrading — support teams waste **30–60 minutes per ticket** manually:
-- Searching logs for related errors
-- Checking past incidents for known patterns
-- Assessing severity based on impact scope
-- Routing to the correct team
-- Creating and updating tickets
+When something breaks in production, an on-call engineer has to manually do all of this before they can even start fixing it:
 
-**IncidentIQ eliminates this waste.** It's a multi-step AI agent that ingests an incident report, searches historical data for context, runs time-series log analysis via ES|QL, determines priority and routing, and executes a triage workflow — all automatically, with full explainability.
+- Search through known issues to see if there's already a documented fix
+- Dig through past incidents to find anything similar
+- Pull up logs and figure out what's actually erroring
+- Estimate how bad it is based on error rates and how many services are affected
+- Decide the priority and figure out which team should handle it
+- Open a ticket with all the context
 
-### Measurable Impact
-| Metric | Before (Manual) | After (IncidentIQ) |
-|---|---|---|
-| Time to first triage | 30–60 min | < 30 sec |
-| Steps for routing | 5–8 manual steps | 1 natural-language request |
-| Error rate in priority | ~25% | ~5% (rule-backed) |
-| Context gathered | 1–2 sources | 3+ sources (logs, past incidents, known issues) |
+That whole process takes 30–60 minutes on a good day, and it's the last thing you want to be doing at 2am during an outage. IncidentIQ automates all of it.
 
 ---
 
-## ✅ How It Works
+## How It Works
 
-A user (or monitoring system) submits an incident in natural language:
-
-> *"Our payment processing API is throwing 500 errors since 14:30 UTC. It's affecting checkout on the main site."*
-
-IncidentIQ then executes this multi-step reasoning loop:
+The agent uses five tools in a reasoning loop. It doesn't follow a rigid script — the LLM decides which tool to call next based on what it learns at each step.
 
 ```
-1. [SEARCH TOOL]     → Search `known_issues` index for matching past solutions
-2. [SEARCH TOOL]     → Search `past_incidents` index for similar historical incidents
-3. [ES|QL TOOL]      → Query `system_logs` for error patterns in the last 2 hours
-4. [ES|QL TOOL]      → Calculate error rate and affected service scope
-5. [WORKFLOW TOOL]   → Trigger triage workflow: set priority, assign team, create ticket
-6. [RESPONSE]        → Return full summary: diagnosis, priority, routing, and actions taken
+1. Search known_issues        → Is there a documented fix for this?
+2. Search past_incidents      → Has something like this happened before?
+3. ES|QL → get_log_errors     → What are the actual error logs saying?
+4. ES|QL → calc_error_rate    → How bad is it? How many services affected?
+5. Workflow → triage_and_route → Set priority, assign team, create ticket
 ```
 
-Each step is selected and executed by the LLM reasoning engine based on what it learns from the previous step's results.
+The workflow step is intentionally rules-based, not AI-driven. Priority and routing decisions need to be deterministic and auditable — that's not a job for an LLM. The agent gathers the context (its strength), then hands off to the workflow for the decisions (where deterministic logic belongs).
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -104,277 +79,217 @@ Each step is selected and executed by the LLM reasoning engine based on what it 
 
 ---
 
-## 🛠️ Agent Tools
-
-### 1. Index Search Tools (built on Search)
-
-| Tool ID | Index | Purpose |
-|---|---|---|
-| `search_known_issues` | `known_issues` | Find documented solutions for known problems |
-| `search_past_incidents` | `past_incidents` | Find similar historical incidents and their resolutions |
-
-### 2. ES\|QL Tools (time-series log analysis)
-
-| Tool ID | Query Purpose | Parameters |
-|---|---|---|
-| `get_log_errors` | Retrieve recent error-level logs for a given service | `service_name` (keyword), `hours_back` (integer) |
-| `calc_error_rate` | Calculate error rate and count unique affected services in a time window | `hours_back` (integer) |
-
-### 3. Workflow Tool
-
-| Tool ID | Workflow | Purpose |
-|---|---|---|
-| `triage_and_route` | `incident_triage_workflow` | Executes the full triage: sets priority, assigns team, indexes a ticket record |
-
----
-
-## ⚙️ Workflows
-
-### `incident_triage_workflow`
-
-Defined in YAML. Triggered by the agent when it has gathered enough context to make a triage decision.
-
-**Steps:**
-1. **Determine Priority** — If/else logic based on error_rate and affected_services passed by the agent
-2. **Assign Team** — Routes to `infrastructure`, `application`, `database`, or `networking` based on service category
-3. **Index Ticket** — Writes a new document to the `incident_tickets` index with full metadata
-4. **Alert (conditional)** — If priority is `critical`, triggers a PagerDuty-style alert (simulated via index write)
-
-See: `workflows/incident_triage_workflow.yaml`
-
----
-
-## 📲 Setup Guide
+## Getting Started
 
 ### Prerequisites
-- An Elastic Cloud Serverless account (free 2-week trial works perfectly)
-- Kibana access with Agent Builder enabled
-- Node.js 18+ (for the setup script)
 
-### Step 1 — Sign Up for Elastic Cloud
+- Elastic Cloud Serverless account (the free 2-week trial is fine)
+- Kibana with Agent Builder enabled
+- Node.js 18+
 
-Go to: https://cloud.elastic.co/registration
-Select **Elasticsearch Serverless** and create your project.
-
-### Step 2 — Get Your API Keys
-
-In Kibana:
-1. Go to **Settings → API Keys**
-2. Create a key with full access
-3. Copy your **Elasticsearch URL** and **API Key**
-
-### Step 3 — Create Your Indexes and Seed Data
-
-Run the setup script:
+### 1. Clone and install
 
 ```bash
-# Clone this repo
 git clone https://github.com/YOUR_USERNAME/incidentiq-agent.git
 cd incidentiq-agent
-
-# Install dependencies
 npm install
+```
 
-# Set your env vars
-export ES_URL="https://your-es-url"
-export ES_API_KEY="your-api-key"
+### 2. Set up your environment
 
-# Run the setup script (creates indexes + seeds data)
+Copy `.env.example` to `.env` and fill in your Elasticsearch URL and API key from Kibana → Settings → API Keys.
+
+```bash
+cp .env.example .env
+# edit .env with your actual values
+```
+
+### 3. Create indexes and seed data
+
+```bash
 npm run setup
 ```
 
-This will create 4 indexes and populate them with realistic sample data:
-- `known_issues` — 15 documented known issues with solutions
+This creates four indexes and populates them:
+- `known_issues` — 15 documented issues with known fixes
 - `past_incidents` — 20 historical incident records
-- `system_logs` — 200 synthetic log entries across multiple services
-- `incident_tickets` — empty (the workflow writes here)
+- `system_logs` — 200 synthetic log entries simulating an active incident
+- `incident_tickets` — empty, the workflow writes here
 
-### Step 4 — Enable Elastic Workflows (Tech Preview)
+Run `npm run verify` afterward to confirm everything looks good.
 
-In Kibana:
-1. Go to **Settings**
-2. Search for **Workflows**
-3. Enable the feature toggle
+### 4. Enable Workflows
 
-### Step 5 — Create the Workflow
+In Kibana → Settings, search for "Workflows" and enable the feature toggle.
 
-1. In Kibana, navigate to **Workflows**
-2. Click **New Workflow**
-3. Paste the YAML from `workflows/incident_triage_workflow.yaml`
-4. Save it with the name `incident_triage_workflow`
-5. Enable the workflow
+### 5. Create the workflow
 
-### Step 6 — Create Custom Tools in Agent Builder
+Go to Kibana → Workflows → New Workflow. Paste the contents of `incident_triage_workflow.yaml` and save it.
 
-In Kibana, go to **Agents → Tools → New Tool**. Create these tools in order:
+### 6. Create the tools
 
-#### Tool 1: `search_known_issues`
-- **Type:** Index search
-- **Index:** `known_issues`
-- **Description:** *Searches the known_issues index for documented solutions to common IT problems. Use this when you need to check if a reported issue has a known fix or workaround.*
+Go to Kibana → Agents → Tools → New Tool. You need to create five tools. The full configuration for each is in `tools.json`, but here's the quick version:
 
-#### Tool 2: `search_past_incidents`
-- **Type:** Index search
-- **Index:** `past_incidents`
-- **Description:** *Searches historical incident records to find similar past incidents and how they were resolved. Use this to understand patterns and find relevant precedent.*
+**Tool 1: `search_known_issues`**
+- Type: Index search
+- Target index: `known_issues`
+- Description and labels: copy from tools.json
 
-#### Tool 3: `get_log_errors`
-- **Type:** ES|QL
-- **Description:** *Retrieves recent error-level log entries for a specific service. Use this to get raw log data and understand what errors are actually occurring.*
-- **Query:**
+**Tool 2: `search_past_incidents`**
+- Type: Index search
+- Target index: `past_incidents`
+- Description and labels: copy from tools.json
+
+**Tool 3: `get_log_errors`**
+- Type: ES|QL
+- Query (paste exactly as-is):
 ```
-FROM system_logs
-| WHERE level == "error" AND service == ?service_name AND @timestamp >= now() - ?hours_back h
-| SORT @timestamp desc
-| KEEP @timestamp, service, message, severity, component
-| LIMIT 20
+FROM system_logs | WHERE level == "error" AND service == ?service_name AND @timestamp >= now() - 2h | SORT @timestamp desc | KEEP @timestamp, service, message, severity, component | LIMIT 20
 ```
-- **Parameters:**
-  - `service_name` — type: `keyword` — *The name of the service to check logs for (e.g., "payment-api", "auth-service")*
-  - `hours_back` — type: `integer` — *Number of hours to look back in time (e.g., 2)*
+- One parameter: `service_name` (type: keyword)
+- Labels: `esql`, `logs`, `diagnostics`
 
-#### Tool 4: `calc_error_rate`
-- **Type:** ES|QL
-- **Description:** *Calculates the current error rate and counts how many unique services are affected in a given time window. Use this to assess the scope and severity of an incident.*
-- **Query:**
+**Tool 4: `calc_error_rate`**
+- Type: ES|QL
+- Query:
 ```
-FROM system_logs
-| WHERE @timestamp >= now() - ?hours_back h
-| STATS
-    total_logs = COUNT(*),
-    error_count = COUNT(level == "error"),
-    unique_services = COUNT_DISTINCT(service)
-| EVAL error_rate = error_count / total_logs * 100
-| KEEP total_logs, error_count, unique_services, error_rate
+FROM system_logs | WHERE @timestamp >= now() - 2h | STATS total_logs = COUNT(*), error_count = COUNT(level == "error"), unique_services = COUNT_DISTINCT(service) | EVAL error_rate = error_count / total_logs * 100 | KEEP total_logs, error_count, unique_services, error_rate
 ```
-- **Parameters:**
-  - `hours_back` — type: `integer` — *Number of hours to analyze (e.g., 2)*
+- No parameters needed
+- Labels: `esql`, `analytics`, `severity`
 
-#### Tool 5: `triage_and_route`
-- **Type:** Workflow
-- **Workflow:** `incident_triage_workflow`
-- **Description:** *Triggers the incident triage workflow. Executes priority determination, team assignment, and ticket creation. Use this AFTER you have gathered diagnosis information from the other tools and are ready to take action.*
+**Tool 5: `triage_and_route`**
+- Type: Workflow
+- Workflow: `incident_triage_workflow`
+- Five parameters: `incident_summary` (string), `error_rate` (number), `affected_services` (string), `primary_service` (string), `service_category` (string)
+- Labels: `workflow`, `triage`, `automation`
 
-### Step 7 — Create the IncidentIQ Agent
+### 7. Create the agent
 
-1. In Kibana, go to **Agents → New Agent**
-2. Set **Display Name:** `IncidentIQ`
-3. Set **Description:** *AI-powered IT incident triage agent. Submit an incident and I will diagnose, prioritize, route, and ticket it automatically.*
-4. Paste the **Custom Instructions** from `config/agent_instructions.txt`
-5. Go to the **Tools** tab
-6. Assign these tools: `search_known_issues`, `search_past_incidents`, `get_log_errors`, `calc_error_rate`, `triage_and_route`
-7. Click **Save**
+Go to Kibana → Agents → New Agent.
+- Display Name: `IncidentIQ`
+- Custom Instructions: paste the contents of `agent_instructions.txt`
+- Assign all five tools you just created
+- Save
 
-### Step 8 — Test It!
+### 8. Test it
 
-Click **Chat** on your IncidentIQ agent and try one of the demo scenarios below.
+Click Chat on the IncidentIQ agent and try any of the scenarios below.
 
 ---
 
-## 📊 Data Indexes
-
-### `known_issues`
-Documents representing documented IT problems with known solutions.
-
-| Field | Type | Description |
-|---|---|---|
-| `issue_id` | keyword | Unique ID |
-| `title` | text (semantic_text) | Short title of the known issue |
-| `description` | text (semantic_text) | Detailed description |
-| `affected_services` | keyword[] | Services this issue affects |
-| `solution` | text | Known fix or workaround |
-| `severity` | keyword | low / medium / high / critical |
-| `created_at` | date | When documented |
-
-### `past_incidents`
-Historical incident records with outcomes.
-
-| Field | Type | Description |
-|---|---|---|
-| `incident_id` | keyword | Unique ID |
-| `title` | text (semantic_text) | Incident title |
-| `description` | text (semantic_text) | Full incident description |
-| `services_affected` | keyword[] | Services that were impacted |
-| `root_cause` | text | What actually caused it |
-| `resolution` | text | How it was fixed |
-| `priority` | keyword | low / medium / high / critical |
-| `team_assigned` | keyword | Which team handled it |
-| `duration_minutes` | integer | How long to resolve |
-| `occurred_at` | date | When it happened |
-
-### `system_logs`
-Synthetic system log entries for log analysis.
-
-| Field | Type | Description |
-|---|---|---|
-| `@timestamp` | date | Log timestamp |
-| `service` | keyword | Service name |
-| `level` | keyword | info / warning / error / critical |
-| `severity` | integer | 1–5 numeric severity |
-| `component` | keyword | Component within the service |
-| `message` | text | Log message |
-| `host` | keyword | Host name |
-
-### `incident_tickets` *(written by workflow)*
-Tickets created by the triage workflow.
-
-| Field | Type | Description |
-|---|---|---|
-| `ticket_id` | keyword | Auto-generated ID |
-| `incident_summary` | text | AI-generated summary |
-| `priority` | keyword | Assigned priority |
-| `team_assigned` | keyword | Assigned team |
-| `status` | keyword | open / in_progress / resolved |
-| `created_at` | date | Creation timestamp |
-| `created_by` | keyword | "IncidentIQ" |
-
----
-
-## 💬 Demo Scenarios
-
-Try these prompts in the IncidentIQ agent chat:
+## Demo Scenarios
 
 ### Scenario 1 — Payment API Outage
-> *"The payment API has been throwing 500 errors for the last hour. Users can't complete purchases."*
+> "The payment API has been throwing 500 errors for the last hour. Users can't complete purchases."
 
-**Expected:** Agent searches known issues (finds DB connection pool issue), checks logs, calculates error rate, routes to application team with HIGH priority.
+The agent finds the known issue (database connection pool exhaustion), matches it to a past incident, pulls the error logs confirming it, and routes to the application team with critical priority. It surfaces the exact kubectl fix from the knowledge base.
 
 ### Scenario 2 — Auth Service Degradation
-> *"Users are reporting login failures intermittently since about 30 minutes ago. Some logins work, some don't."*
+> "Users are reporting login failures intermittently since about 30 minutes ago. Some logins work, some don't."
 
-**Expected:** Agent finds a past incident about auth token refresh, checks logs for pattern, assesses as MEDIUM priority, routes to application team.
+The agent searches for auth-related issues, checks the logs for what's actually happening with auth-service, and routes accordingly. Note: the specific error the agent finds depends on what's in the current log data — the agent responds to what it actually sees rather than guessing, which is the right behavior.
 
-### Scenario 3 — Full Outage — Multiple Services Down
-> *"Everything is down. The website, the API, the mobile app — nothing is working. Started about 45 minutes ago."*
+### Scenario 3 — Full Outage
+> "Everything is down. The website, the API, the mobile app — nothing is working. Started about 45 minutes ago."
 
-**Expected:** Agent detects high error rate across multiple services, identifies it as infrastructure-level, sets CRITICAL priority, routes to infrastructure team, triggers alert.
+This one's the best demo. The agent detects the cascading failures across multiple services, correctly identifies it as infrastructure-level rather than blaming any single service, assigns critical priority, and triggers the alert path in the workflow.
 
-### Scenario 4 — Slow Database Queries
-> *"The product catalog page is loading really slowly. It was fine this morning."*
+### Scenario 4 — Slow Product Catalog
+> "The product catalog page is loading really slowly. It was fine this morning."
 
-**Expected:** Agent searches for known DB performance issues, checks logs for slow query warnings, routes to database team with MEDIUM priority.
+The agent finds the Redis cache eviction issue in the knowledge base, confirms it with logs showing 90%+ cache miss rate, and routes to the infrastructure team with high priority. It pulls up the exact Redis config fix.
 
 ---
 
-## 💻 Tech Stack
+## What's in the Repo
 
-| Component | Technology |
+| File | What it does |
 |---|---|
-| Search & Analytics | Elasticsearch (Serverless) |
+| `setup.js` | Creates all four indexes and seeds them with data |
+| `verify.js` | Checks that setup ran correctly |
+| `agent_instructions.txt` | The system prompt — paste this into Agent Builder |
+| `tools.json` | Full config for all 5 tools (reference while creating them in Kibana) |
+| `incident_triage_workflow.yaml` | The workflow YAML — paste into Kibana Workflows |
+| `submission_description.md` | Devpost submission writeup |
+| `.env.example` | Template for your Elasticsearch credentials |
+
+---
+
+## Index Schemas
+
+### known_issues
+| Field | Type | Notes |
+|---|---|---|
+| issue_id | keyword | e.g. KI-001 |
+| title | semantic_text | Enables semantic search |
+| description | semantic_text | Enables semantic search |
+| affected_services | keyword[] | Which services this issue hits |
+| solution | text | The documented fix |
+| severity | keyword | low / medium / high / critical |
+| created_at | date | |
+
+### past_incidents
+| Field | Type | Notes |
+|---|---|---|
+| incident_id | keyword | e.g. INC-2025-001 |
+| title | semantic_text | |
+| description | semantic_text | |
+| services_affected | keyword[] | |
+| root_cause | text | |
+| resolution | text | How it was actually fixed |
+| priority | keyword | |
+| team_assigned | keyword | |
+| duration_minutes | integer | |
+| occurred_at | date | |
+
+### system_logs
+| Field | Type | Notes |
+|---|---|---|
+| @timestamp | date | |
+| service | keyword | e.g. payment-api |
+| level | keyword | info / warning / error / critical |
+| severity | integer | 1–5 |
+| component | keyword | e.g. db-connector |
+| message | text | The actual log message |
+| host | keyword | e.g. payment-api-1.prod.cluster |
+
+### incident_tickets *(written by the workflow)*
+| Field | Type | Notes |
+|---|---|---|
+| ticket_id | keyword | TKT-{execution_id} |
+| incident_summary | text | AI-generated summary |
+| priority | keyword | Determined by workflow rules |
+| team_assigned | keyword | infrastructure / application / database / networking |
+| team_channel | keyword | e.g. #infra-oncall |
+| status | keyword | Always "open" at creation |
+| primary_service | keyword | |
+| affected_services | keyword | Comma-separated |
+| error_rate | keyword | Percentage at time of triage |
+| created_at | date | |
+| created_by | keyword | "IncidentIQ" |
+| alert_type | keyword | Only on critical alerts |
+| alert_status | keyword | Only on critical alerts |
+| alert_message | text | Only on critical alerts |
+| alert_created_at | date | Only on critical alerts |
+| alert_created_by | keyword | Only on critical alerts |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Search & Storage | Elasticsearch Serverless |
 | Agent Framework | Elastic Agent Builder |
-| Agent Reasoning | Elastic Managed LLM (default) |
+| Reasoning | Elastic Managed LLM |
 | Log Analysis | ES\|QL |
-| Automation | Elastic Workflows (YAML) |
+| Automation | Elastic Workflows |
 | UI | Kibana Agent Chat |
-| Setup Script | Node.js + Elasticsearch JS Client |
-| Protocols | Kibana API, MCP-compatible |
+| Setup Scripts | Node.js + @elastic/elasticsearch |
 
 ---
 
-## 📄 License
+## License
 
-This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
-
----
-
-*Built for the Elasticsearch Agent Builder Hackathon 2026. Questions? Join the #hackathon-agent-builder Slack channel.*
+MIT — see LICENSE file.
