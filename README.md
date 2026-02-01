@@ -120,7 +120,7 @@ Run `npm run verify` afterward to confirm everything looks good.
 
 ### 4. Enable Workflows
 
-In Kibana → Settings, search for "Workflows" and enable the feature toggle.
+In Kibana → Settings → Advanced Settings, search for "workflows:ui:enabled" and enable the feature toggle.
 
 ### 5. Create the workflow
 
